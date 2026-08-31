@@ -101,6 +101,7 @@ with tab_eda:
         fig_season_bar = px.bar(
             rows_per_season, x="SEASON", y="Rows", title="Player-game rows per season"
         )
+        fig_season_bar.update_xaxes(type="category")
         st.plotly_chart(fig_season_bar, use_container_width=True)
 
     col_c, col_d = st.columns(2)
@@ -253,10 +254,11 @@ with tab_search:
             title=f"{player} — per-game averages by season",
         )
         fig.update_layout(
-            xaxis_title="Season", 
+            xaxis_title="Season",
             yaxis_title="Per-game average",
             xaxis=dict(tickangle=-45)
         )
+        fig.update_xaxes(type="category")
         st.plotly_chart(fig, use_container_width=True)
 
     shooting_choice = st.multiselect(
@@ -271,11 +273,12 @@ with tab_search:
             title=f"{player} — shooting percentages by season",
         )
         fig2.update_layout(
-            xaxis_title="Season", 
-            yaxis_title="Percentage", 
+            xaxis_title="Season",
+            yaxis_title="Percentage",
             yaxis_tickformat=".0%",
             xaxis=dict(tickangle=-45)
         )
+        fig2.update_xaxes(type="category")
         st.plotly_chart(fig2, use_container_width=True)
 
     st.divider()
