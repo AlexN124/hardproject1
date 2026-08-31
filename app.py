@@ -1,11 +1,15 @@
+import os
+
 import pandas as pd
 import plotly.express as px
 import streamlit as st
 import unicodedata
+from dotenv import load_dotenv
+from sqlalchemy import create_engine
+
+load_dotenv()
 
 st.set_page_config(page_title="NBA Player Explorer", page_icon="🏀", layout="wide")
-
-DATA_PATH = "nba_stats_2003_2010_combined.csv"
 
 NUMERIC_COLS = [
     "MIN", "FGM", "FGA", "FG_PCT", "FG3M", "FG3A", "FG3_PCT",
@@ -14,17 +18,22 @@ NUMERIC_COLS = [
 ]
 
 
-@st.cache_data
-def load_data(path: str) -> pd.DataFrame:
+@st.cache_data(ttl=3600)
+def load_data() -> pd.DataFrame:
+    db_url = os.environ.get("SUPABASE_DB_URL")
+    if not db_url:
+        st.error(" SUPABASE_DB_URL is not set.")
+        st.stop()
+
     try:
-        df = pd.read_csv(path)
-    except FileNotFoundError:
-        st.error(f" Data file not found: {path}")
-        st.stop()
+        engine = create_engine(db_url.replace("postgresql://", "postgresql+psycopg://", 1))
+        df = pd.read_sql("SELECT * FROM nba_stats", engine)
     except Exception as e:
-        st.error(f" Error loading data: {e}")
+        st.error(f" Error loading data from Supabase: {e}")
         st.stop()
-    
+
+    df.columns = [c.upper() for c in df.columns]
+
     # Validate required columns
     required_cols = ["PLAYER_NAME", "GAME_ID", "SEASON", "SEASON_TYPE", "TEAM_ABBREVIATION", "PTS", "MIN", "REB", "AST", "STL", "BLK"]
     missing_cols = [col for col in required_cols if col not in df.columns]
@@ -58,7 +67,7 @@ def load_data(path: str) -> pd.DataFrame:
 
 
 try:
-    df = load_data(DATA_PATH)
+    df = load_data()
 except Exception as e:
     st.error(f"Failed to load data: {e}")
     st.stop()

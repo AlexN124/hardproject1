@@ -19,16 +19,19 @@ image = (
         "pandas>=3.0.5",
         "plotly>=6.9.0",
         "numpy>=2.4.6",
+        "sqlalchemy>=2.0.52",
+        "psycopg[binary]>=3.3.4",
+        "python-dotenv>=1.2.3",
     )
     .add_local_file("app.py", remote_path="/root/app.py")
-    .add_local_file(
-        "nba_stats_2003_2010_combined.csv",
-        remote_path="/root/nba_stats_2003_2010_combined.csv",
-    )
 )
 
+# Reads SUPABASE_DB_URL out of the local .env at deploy time so the
+# connection string never has to live in code.
+db_secret = modal.Secret.from_dotenv()
 
-@app.function(image=image, timeout=3600, min_containers=1)
+
+@app.function(image=image, timeout=3600, min_containers=1, secrets=[db_secret])
 @modal.web_server(port=8000, startup_timeout=60)
 def run_streamlit():
     import subprocess
