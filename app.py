@@ -1,6 +1,7 @@
 import pandas as pd
 import plotly.express as px
 import streamlit as st
+import unicodedata
 
 st.set_page_config(page_title="NBA Player Explorer", page_icon="🏀", layout="wide")
 
@@ -15,11 +16,26 @@ NUMERIC_COLS = [
 
 @st.cache_data
 def load_data(path: str) -> pd.DataFrame:
-    df = pd.read_csv(path)
+    try:
+        df = pd.read_csv(path)
+    except FileNotFoundError:
+        st.error(f" Data file not found: {path}")
+        st.stop()
+    except Exception as e:
+        st.error(f" Error loading data: {e}")
+        st.stop()
+    
+    # Validate required columns
+    required_cols = ["PLAYER_NAME", "GAME_ID", "SEASON", "SEASON_TYPE", "TEAM_ABBREVIATION", "PTS", "MIN", "REB", "AST", "STL", "BLK"]
+    missing_cols = [col for col in required_cols if col not in df.columns]
+    if missing_cols:
+        st.error(f" Missing required columns: {', '.join(missing_cols)}")
+        st.stop()
+    
     # MIN comes in as "MM:SS" strings — convert to float minutes.
     def parse_min(v):
         if pd.isna(v):
-            return None
+            return None 
         s = str(v)
         if ":" in s:
             m, sec = s.split(":")
@@ -33,10 +49,19 @@ def load_data(path: str) -> pd.DataFrame:
     for col in NUMERIC_COLS:
         if col != "MIN":
             df[col] = pd.to_numeric(df[col], errors="coerce")
+    
+    # Normalize player names: strip whitespace and normalize Unicode characters
+    df["PLAYER_NAME"] = df["PLAYER_NAME"].str.strip()
+    df["PLAYER_NAME"] = df["PLAYER_NAME"].apply(lambda x: unicodedata.normalize("NFC", x) if pd.notna(x) else x)
+    
     return df
 
 
-df = load_data(DATA_PATH)
+try:
+    df = load_data(DATA_PATH)
+except Exception as e:
+    st.error(f"Failed to load data: {e}")
+    st.stop()
 
 st.title("🏀 NBA Player Explorer (2003–2010)")
 
@@ -112,6 +137,9 @@ with tab_eda:
 
 with tab_search:
     players = sorted(df["PLAYER_NAME"].dropna().unique())
+    if len(players) == 0:
+        st.error("❌ No player data available in the dataset.")
+        st.stop()
     default_idx = players.index("Ray Allen") if "Ray Allen" in players else 0
     player = st.selectbox("Search for a player", players, index=default_idx)
 
@@ -197,8 +225,15 @@ with tab_search:
             FTA=("FTA", "sum"),
         )
         .reset_index()
-        .sort_values("SEASON")
     )
+    # Properly sort seasons (handles both regular format and edge cases)
+    season_avg["SEASON"] = pd.Categorical(
+        season_avg["SEASON"], 
+        categories=sorted(season_avg["SEASON"].unique()), 
+        ordered=True
+    )
+    season_avg = season_avg.sort_values("SEASON").reset_index(drop=True)
+    
     season_avg["FG_PCT"] = season_avg["FGM"] / season_avg["FGA"].replace(0, pd.NA)
     season_avg["FG3_PCT"] = season_avg["FG3M"] / season_avg["FG3A"].replace(0, pd.NA)
     season_avg["FT_PCT"] = season_avg["FTM"] / season_avg["FTA"].replace(0, pd.NA)
@@ -217,7 +252,11 @@ with tab_search:
             chart_df, x="SEASON", y="Value", color="Stat", markers=True,
             title=f"{player} — per-game averages by season",
         )
-        fig.update_layout(xaxis_title="Season", yaxis_title="Per-game average")
+        fig.update_layout(
+            xaxis_title="Season", 
+            yaxis_title="Per-game average",
+            xaxis=dict(tickangle=-45)
+        )
         st.plotly_chart(fig, use_container_width=True)
 
     shooting_choice = st.multiselect(
@@ -231,7 +270,12 @@ with tab_search:
             shoot_df, x="SEASON", y="Pct", color="Split", markers=True,
             title=f"{player} — shooting percentages by season",
         )
-        fig2.update_layout(xaxis_title="Season", yaxis_title="Percentage", yaxis_tickformat=".0%")
+        fig2.update_layout(
+            xaxis_title="Season", 
+            yaxis_title="Percentage", 
+            yaxis_tickformat=".0%",
+            xaxis=dict(tickangle=-45)
+        )
         st.plotly_chart(fig2, use_container_width=True)
 
     st.divider()
